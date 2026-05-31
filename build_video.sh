@@ -11,6 +11,9 @@ WORK="build_clips"
 OUT="kanoya_shoka_reel.mp4"
 TRANS=0.8
 SCRIM="$WORK/scrim.png"
+BGM="かのや.mp3"          # バックグラウンドミュージック
+BGM_GAIN=0.9             # 音量（1.0=原音）
+FADE_IN=1.5; FADE_OUT=2.5
 rm -rf "$WORK"; mkdir -p "$WORK"
 
 # 下部スクリム（黒の縦グラデ・下ほど濃い）を生成
@@ -85,7 +88,16 @@ done
 filter="${filter%;}"
 
 echo ">> total approx: ${acc}s"
-ffmpeg -y "${inputs[@]}" -filter_complex "$filter" -map "[vout]" \
+
+# BGM: 動画尺に合わせてトリム＋フェードイン/アウト
+fout_st=$(awk "BEGIN{printf \"%.3f\", $acc-$FADE_OUT}")
+afilter="[${n}:a]atrim=0:${acc},asetpts=PTS-STARTPTS,\
+afade=t=in:st=0:d=${FADE_IN},afade=t=out:st=${fout_st}:d=${FADE_OUT},\
+volume=${BGM_GAIN}[aout]"
+
+ffmpeg -y "${inputs[@]}" -i "$BGM" \
+  -filter_complex "${filter};${afilter}" \
+  -map "[vout]" -map "[aout]" \
   -r $FPS -c:v libx264 -pix_fmt yuv420p -preset medium -crf 19 \
-  -movflags +faststart "$OUT"
+  -c:a aac -b:a 192k -shortest -movflags +faststart "$OUT"
 echo "DONE -> $OUT"
